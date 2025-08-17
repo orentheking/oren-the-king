@@ -16,11 +16,11 @@ function App() {
   // Load data on mount
   useEffect(() => {
     const loadData = async () => {
-      const { data, error } = await supabase.from("tasksApp").select("*").eq("id", 1).single();
+      const { data, error } = await supabase.from("tasksapp").select("*").eq("id", 1).single();
 
       if (error && error.code === "PGRST116") {
         // no row found, create one
-        await supabase.from("tasksApp").insert([{ id: 1, tasks: {}, total: 0 }]);
+        await supabase.from("tasksapp").insert([{ id: 1, tasks: {}, total: 0 }]);
       } else if (data) {
         setTasks(data.tasks || {});
         setTotal(data.total || 0);
@@ -34,7 +34,7 @@ function App() {
       .channel("tasks-changes")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "tasksApp", filter: "id=eq.1" },
+        { event: "*", schema: "public", table: "tasksapp", filter: "id=eq.1" },
         (payload) => {
           if (payload.new) {
             setTasks(payload.new.tasks || {});
@@ -61,7 +61,7 @@ function App() {
     setTaskName("");
     setTaskValue("");
 
-    await supabase.from("tasksApp").update({ tasks: updatedTasks }).eq("id", 1);
+    await supabase.from("tasksapp").update({ tasks: updatedTasks }).eq("id", 1);
   };
 
   const completeTask = async (dayIndex, taskIndex) => {
@@ -80,13 +80,13 @@ function App() {
       setShowConfetti(true);
       setTimeout(() => setShowConfetti(false), 2000);
 
-      await supabase.from("tasksApp").update({ tasks: updatedTasks, total: newTotal }).eq("id", 1);
+      await supabase.from("tasksapp").update({ tasks: updatedTasks, total: newTotal }).eq("id", 1);
     }
   };
 
   const resetTotal = async () => {
     setTotal(0);
-    await supabase.from("tasksApp").update({ total: 0 }).eq("id", 1);
+    await supabase.from("tasksapp").update({ total: 0 }).eq("id", 1);
   };
 
   return (
