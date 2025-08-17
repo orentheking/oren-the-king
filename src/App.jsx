@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { db } from "./firebase";
-import { doc, setDoc, onSnapshot, updateDoc } from "firebase/firestore";
+import { supabase } from "./supabaseClient"; // <-- new file you’ll create
 import Confetti from "react-confetti";
 
 const daysOfWeek = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
@@ -14,26 +13,40 @@ function App() {
   const [total, setTotal] = useState(0);
   const [showConfetti, setShowConfetti] = useState(false);
 
-  const tasksDocRef = doc(db, "tasksApp", "data");
-
-  // טעינת נתונים בזמן אמת
+  // Load data on mount
   useEffect(() => {
-    const unsubscribe = onSnapshot(tasksDocRef, async (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
+    const loadData = async () => {
+      const { data, error } = await supabase.from("tasksApp").select("*").eq("id", 1).single();
+
+      if (error && error.code === "PGRST116") {
+        // no row found, create one
+        await supabase.from("tasksApp").insert([{ id: 1, tasks: {}, total: 0 }]);
+      } else if (data) {
         setTasks(data.tasks || {});
         setTotal(data.total || 0);
-      } else {
-        // יצירת מסמך רק אם הוא לא קיים
-        try {
-          await setDoc(tasksDocRef, { tasks: {}, total: 0 });
-        } catch (err) {
-          console.error("Error creating initial doc:", err);
-        }
       }
-    });
+    };
 
-    return () => unsubscribe();
+    loadData();
+
+    // Subscribe to realtime changes
+    const channel = supabase
+      .channel("tasks-changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "tasksApp", filter: "id=eq.1" },
+        (payload) => {
+          if (payload.new) {
+            setTasks(payload.new.tasks || {});
+            setTotal(payload.new.total || 0);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const addTask = async () => {
@@ -48,7 +61,7 @@ function App() {
     setTaskName("");
     setTaskValue("");
 
-    await updateDoc(tasksDocRef, { tasks: updatedTasks });
+    await supabase.from("tasksApp").update({ tasks: updatedTasks }).eq("id", 1);
   };
 
   const completeTask = async (dayIndex, taskIndex) => {
@@ -64,17 +77,16 @@ function App() {
       setTasks(updatedTasks);
       setTotal(newTotal);
 
-      // הצגת קונפטי לכיף
       setShowConfetti(true);
       setTimeout(() => setShowConfetti(false), 2000);
 
-      await updateDoc(tasksDocRef, { tasks: updatedTasks, total: newTotal });
+      await supabase.from("tasksApp").update({ tasks: updatedTasks, total: newTotal }).eq("id", 1);
     }
   };
 
   const resetTotal = async () => {
     setTotal(0);
-    await updateDoc(tasksDocRef, { total: 0 });
+    await supabase.from("tasksApp").update({ total: 0 }).eq("id", 1);
   };
 
   return (
